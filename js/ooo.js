@@ -30,9 +30,7 @@ document.addEventListener("DOMContentLoaded", () => {
         audio.pause();
         volumeIcon.classList.replace('fa-volume-up', 'fa-volume-mute');
       } else {
-        audio.play().catch(() => {
-          // กรณี autoplay ถูกบล็อก
-        });
+        audio.play();
         volumeIcon.classList.replace('fa-volume-mute', 'fa-volume-up');
       }
       isPlaying = !isPlaying;
@@ -42,7 +40,6 @@ document.addEventListener("DOMContentLoaded", () => {
       audio.volume = volumeRange.value / 100;
     });
 
-    // พยายามเล่นเพลงตอนโหลด แต่ถ้าบล็อกไว้ ให้รอ interaction
     audio.play().then(() => {
       isPlaying = true;
       volumeIcon.classList.replace('fa-volume-mute', 'fa-volume-up');
@@ -51,25 +48,6 @@ document.addEventListener("DOMContentLoaded", () => {
       isPlaying = false;
     });
   }
-
-  // รองรับมือถือให้เล่นเสียงหลัง user interaction (touchstart, pointerdown)
-  const allowMobileAudio = () => {
-    if (!audio) return;
-
-    const playAudio = () => {
-      audio.play().catch(err => {
-        console.log("Mobile autoplay block (expected):", err);
-      });
-
-      window.removeEventListener('touchstart', playAudio);
-      window.removeEventListener('pointerdown', playAudio);
-    };
-
-    window.addEventListener('touchstart', playAudio, { once: true });
-    window.addEventListener('pointerdown', playAudio, { once: true });
-  };
-
-  allowMobileAudio();
 });
 
 // Discord Presence via Lanyard WebSocket
@@ -140,7 +118,115 @@ ws.addEventListener("message", (event) => {
   } else {
     fullActivityText = statusTextMap[status] || "ไม่มีสถานะ";
   }
+const profile = document.querySelector('.profile-center');
+const maxAngle = 20;
+const deadZoneSizeX = window.innerWidth / 6;  
+const deadZoneSizeY = window.innerHeight / 6; 
+let timeoutId;
 
+window.addEventListener('mousemove', (e) => {
+  const centerX = window.innerWidth / 2;
+  const centerY = window.innerHeight / 2;
+
+  const deltaX = e.clientX - centerX;
+  const deltaY = e.clientY - centerY;
+
+  // ถ้าเม้าส์อยู่ใน dead zone ให้นิ่ง
+  if (Math.abs(deltaX) < deadZoneSizeX && Math.abs(deltaY) < deadZoneSizeY) {
+    profile.style.transform = 'perspective(1000px) rotateX(0deg) rotateY(0deg)';
+  } else {
+    // หมุนตามเม้าส์เมื่ออยู่นอก dead zone
+    const rotateY = (deltaX / centerX) * maxAngle * -1;
+    const rotateX = (deltaY / centerY) * maxAngle;
+    profile.style.transform = `perspective(1000px) rotateX(${rotateX}deg) rotateY(${rotateY}deg)`;
+  }
+
+  // เคลียร์ timeout เดิม 
+  if (timeoutId) clearTimeout(timeoutId);
+
+  // ตั้ง timeout ถ้าเม้าส์นิ่ง
+  timeoutId = setTimeout(() => {
+    profile.style.transform = 'perspective(1000px) rotateX(0deg) rotateY(0deg)';
+  }, 1000);
+});
+window.addEventListener('load', () => {
+  const bgMusic = document.getElementById('bg-music');
+  
+  bgMusic.play().catch(() => {
+
+    console.log('Autoplay was prevented.');
+  });
+});
+window.addEventListener('load', () => {
+  const loader = document.getElementById('loading-screen');
+  const mainContent = document.querySelector('.profile-center');
+  const topControls = document.querySelector('.top-controls');
+  const bgMusic = document.getElementById('bg-music');
+  const enterButton = document.getElementById('enter-button');
+  const volumeRange = document.getElementById('volume-range');
+  const volumeIcon = document.getElementById('volume-icon');
+
+  bgMusic.volume = volumeRange.value / 100;
+
+  enterButton.addEventListener('click', () => {
+    loader.classList.add('hidden');
+    mainContent.classList.add('visible');
+    topControls.classList.add('visible');
+
+    bgMusic.play().catch(() => {
+      console.log('Autoplay ถูกบล็อก');
+    });
+  });
+
+  // volume slider
+  volumeRange.addEventListener('input', () => {
+    bgMusic.volume = volumeRange.value / 100;
+    if (bgMusic.volume === 0) {
+      volumeIcon.className = 'fas fa-volume-mute';
+    } else if (bgMusic.volume <= 0.5) {
+      volumeIcon.className = 'fas fa-volume-down';
+    } else {
+      volumeIcon.className = 'fas fa-volume-up';
+    }
+  });
+
+  volumeIcon.addEventListener('click', () => {
+    if (bgMusic.volume > 0) {
+      bgMusic.volume = 0;
+      volumeRange.value = 0;
+      volumeIcon.className = 'fas fa-volume-mute';
+    } else {
+      bgMusic.volume = 0.5;
+      volumeRange.value = 50;
+      volumeIcon.className = 'fas fa-volume-down';
+    }
+  });
+
+  // รอให้กดปุ่มเริ่ม
+  startBtn.addEventListener('click', () => {
+    loader.classList.add('hidden');
+    mainContent.classList.add('visible');
+  });
+});
+const loadingScreen = document.getElementById('loading-screen');
+const mainContent = document.querySelector('.profile-center');
+const controls = document.querySelector('.top-controls');
+const bgMusic = document.getElementById('bg-music');
+const volumeRange = document.getElementById('volume-range');
+const volumeIcon = document.getElementById('volume-icon');
+
+// เปลี่ยนจากจับปุ่ม มาเป็นจับคลิกที่ loading screen ทั้งหมด
+loadingScreen.addEventListener('click', () => {
+  loadingScreen.classList.add('hidden');
+  mainContent.classList.add('visible');
+  controls.style.display = 'flex';
+
+  bgMusic.volume = volumeRange.value / 100;
+  bgMusic.play().catch(() => {
+    alert("ไม่สามารถเล่นเพลงได้อัตโนมัติ กรุณาอนุญาตในเบราว์เซอร์ของคุณ");
+  });
+});
+  // Update DOM elements
   const avatarEl = document.getElementById("discord-avatar");
   if (avatarEl) {
     avatarEl.src = avatarUrl;
@@ -166,100 +252,6 @@ ws.addEventListener("message", (event) => {
 
   const statusDotMini = document.getElementById("mini-status-dot");
   if (statusDotMini) statusDotMini.className = `status-dot ${status}`;
-});
-
-// 3D Profile Animation
-const profile = document.querySelector('.profile-center');
-const maxAngle = 20;
-const deadZoneSizeX = window.innerWidth / 6;
-const deadZoneSizeY = window.innerHeight / 6;
-let timeoutId;
-
-window.addEventListener('mousemove', (e) => {
-  const centerX = window.innerWidth / 2;
-  const centerY = window.innerHeight / 2;
-  const deltaX = e.clientX - centerX;
-  const deltaY = e.clientY - centerY;
-
-  if (Math.abs(deltaX) < deadZoneSizeX && Math.abs(deltaY) < deadZoneSizeY) {
-    profile.style.transform = 'perspective(1000px) rotateX(0deg) rotateY(0deg)';
-  } else {
-    const rotateY = (deltaX / centerX) * maxAngle * -1;
-    const rotateX = (deltaY / centerY) * maxAngle;
-    profile.style.transform = `perspective(1000px) rotateX(${rotateX}deg) rotateY(${rotateY}deg)`;
-  }
-
-  if (timeoutId) clearTimeout(timeoutId);
-  timeoutId = setTimeout(() => {
-    profile.style.transform = 'perspective(1000px) rotateX(0deg) rotateY(0deg)';
-  }, 1000);
-});
-
-// Responsive Design Handling (Basic)
-window.addEventListener('resize', () => {
-  document.body.style.fontSize = `${Math.max(14, window.innerWidth / 100)}px`;
-});
-
-// Loading Screen Interaction
-window.addEventListener('load', () => {
-  const loader = document.getElementById('loading-screen');
-  const mainContent = document.querySelector('.profile-center');
-  const topControls = document.querySelector('.top-controls');
-  const bgMusic = document.getElementById('bg-music');
-  const enterButton = document.getElementById('enter-button');
-  const volumeRange = document.getElementById('volume-range');
-  const volumeIcon = document.getElementById('volume-icon');
-
-  if (!loader || !mainContent || !enterButton || !bgMusic) return;
-
-  bgMusic.volume = volumeRange.value / 100;
-
-  // เปลี่ยนจาก click เป็น pointerdown และเพิ่ม touchstart
-  enterButton.addEventListener('pointerdown', () => {
-    loader.classList.add('hidden');
-    mainContent.classList.add('visible');
-    topControls?.classList.add('visible');
-
-    bgMusic.play().catch(() => {
-      console.log('Autoplay ถูกบล็อก');
-    });
-  });
-  enterButton.addEventListener('touchstart', (e) => e.preventDefault()); // ป้องกัน double event pointer+touch
-
-  // loader click เปลี่ยนเป็น pointerdown + touchstart
-  loader.addEventListener('pointerdown', () => {
-    loader.classList.add('hidden');
-    mainContent.classList.add('visible');
-    if (topControls) topControls.style.display = 'flex';
-
-    bgMusic.play().catch(() => {
-      alert("ไม่สามารถเล่นเพลงได้อัตโนมัติ กรุณาอนุญาตในเบราว์เซอร์ของคุณ");
-    });
-  });
-  loader.addEventListener('touchstart', (e) => e.preventDefault());
-  
-  volumeRange.addEventListener('input', () => {
-    bgMusic.volume = volumeRange.value / 100;
-    if (bgMusic.volume === 0) {
-      volumeIcon.className = 'fas fa-volume-mute';
-    } else if (bgMusic.volume <= 0.5) {
-      volumeIcon.className = 'fas fa-volume-down';
-    } else {
-      volumeIcon.className = 'fas fa-volume-up';
-    }
-  });
-
-  volumeIcon.addEventListener('click', () => {
-    if (bgMusic.volume > 0) {
-      bgMusic.volume = 0;
-      volumeRange.value = 0;
-      volumeIcon.className = 'fas fa-volume-mute';
-    } else {
-      bgMusic.volume = 0.5;
-      volumeRange.value = 50;
-      volumeIcon.className = 'fas fa-volume-down';
-    }
-  });
 });
 
 

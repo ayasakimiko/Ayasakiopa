@@ -30,7 +30,9 @@ document.addEventListener("DOMContentLoaded", () => {
         audio.pause();
         volumeIcon.classList.replace('fa-volume-up', 'fa-volume-mute');
       } else {
-        audio.play();
+        audio.play().catch(() => {
+          // กรณี autoplay ถูกบล็อก
+        });
         volumeIcon.classList.replace('fa-volume-mute', 'fa-volume-up');
       }
       isPlaying = !isPlaying;
@@ -40,6 +42,7 @@ document.addEventListener("DOMContentLoaded", () => {
       audio.volume = volumeRange.value / 100;
     });
 
+    // พยายามเล่นเพลงตอนโหลด แต่ถ้าบล็อกไว้ ให้รอ interaction
     audio.play().then(() => {
       isPlaying = true;
       volumeIcon.classList.replace('fa-volume-mute', 'fa-volume-up');
@@ -48,6 +51,25 @@ document.addEventListener("DOMContentLoaded", () => {
       isPlaying = false;
     });
   }
+
+  // รองรับมือถือให้เล่นเสียงหลัง user interaction (touchstart, pointerdown)
+  const allowMobileAudio = () => {
+    if (!audio) return;
+
+    const playAudio = () => {
+      audio.play().catch(err => {
+        console.log("Mobile autoplay block (expected):", err);
+      });
+
+      window.removeEventListener('touchstart', playAudio);
+      window.removeEventListener('pointerdown', playAudio);
+    };
+
+    window.addEventListener('touchstart', playAudio, { once: true });
+    window.addEventListener('pointerdown', playAudio, { once: true });
+  };
+
+  allowMobileAudio();
 });
 
 // Discord Presence via Lanyard WebSocket
@@ -192,7 +214,8 @@ window.addEventListener('load', () => {
 
   bgMusic.volume = volumeRange.value / 100;
 
-  enterButton.addEventListener('click', () => {
+  // เปลี่ยนจาก click เป็น pointerdown และเพิ่ม touchstart
+  enterButton.addEventListener('pointerdown', () => {
     loader.classList.add('hidden');
     mainContent.classList.add('visible');
     topControls?.classList.add('visible');
@@ -201,7 +224,20 @@ window.addEventListener('load', () => {
       console.log('Autoplay ถูกบล็อก');
     });
   });
+  enterButton.addEventListener('touchstart', (e) => e.preventDefault()); // ป้องกัน double event pointer+touch
 
+  // loader click เปลี่ยนเป็น pointerdown + touchstart
+  loader.addEventListener('pointerdown', () => {
+    loader.classList.add('hidden');
+    mainContent.classList.add('visible');
+    if (topControls) topControls.style.display = 'flex';
+
+    bgMusic.play().catch(() => {
+      alert("ไม่สามารถเล่นเพลงได้อัตโนมัติ กรุณาอนุญาตในเบราว์เซอร์ของคุณ");
+    });
+  });
+  loader.addEventListener('touchstart', (e) => e.preventDefault());
+  
   volumeRange.addEventListener('input', () => {
     bgMusic.volume = volumeRange.value / 100;
     if (bgMusic.volume === 0) {
@@ -224,18 +260,8 @@ window.addEventListener('load', () => {
       volumeIcon.className = 'fas fa-volume-down';
     }
   });
-
-  // Alternative loading screen click to enter
-  loader.addEventListener('click', () => {
-    loader.classList.add('hidden');
-    mainContent.classList.add('visible');
-    topControls.style.display = 'flex';
-
-    bgMusic.play().catch(() => {
-      alert("ไม่สามารถเล่นเพลงได้อัตโนมัติ กรุณาอนุญาตในเบราว์เซอร์ของคุณ");
-    });
-  });
 });
+
 
 
 
